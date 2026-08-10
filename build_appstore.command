@@ -1,12 +1,12 @@
 #!/bin/bash
-# Mac-App-Store-Build: sandboxed, signiert, als .pkg für den Upload.
+# Mac App Store build: sandboxed, signed, packaged as .pkg for upload.
 #
-# Vorher nötig (siehe APPSTORE.md):
-#   IDENTITY_APP="Apple Distribution: Dein Name (TEAMID)"
-#   IDENTITY_PKG="3rd Party Mac Developer Installer: Dein Name (TEAMID)"
-#   optional: BUNDLE_ID, VERSION, appstore.provisionprofile im Ordner
+# Required beforehand (see APPSTORE.md):
+#   IDENTITY_APP="Apple Distribution: Your Name (TEAMID)"
+#   IDENTITY_PKG="3rd Party Mac Developer Installer: Your Name (TEAMID)"
+#   optional: BUNDLE_ID, VERSION, appstore.provisionprofile in this folder
 #
-# Ohne IDENTITY_* läuft ein Trockenlauf mit Ad-hoc-Signatur (kein .pkg).
+# Without IDENTITY_* this performs a dry run with an ad-hoc signature (no .pkg).
 set -e
 cd "$(dirname "$0")"
 
@@ -40,31 +40,31 @@ pb ITSAppUsesNonExemptEncryption false bool
 
 if [ -f "$PROFILE" ]; then
     cp "$PROFILE" "$APP/Contents/embedded.provisionprofile"
-    echo "Provisioning-Profil eingebettet: $PROFILE"
+    echo "Embedded provisioning profile: $PROFILE"
 else
-    echo "Hinweis: kein $PROFILE gefunden (für den Store-Upload nötig)"
+    echo "Note: no $PROFILE found (required for the store upload)"
 fi
 
 xattr -cr "$APP"
 if [ -n "$IDENTITY_APP" ]; then
     SIGN="$IDENTITY_APP"; TS="--timestamp"
 else
-    echo "WARNUNG: IDENTITY_APP nicht gesetzt – Trockenlauf mit Ad-hoc-Signatur"
+    echo "WARNING: IDENTITY_APP not set - dry run with ad-hoc signature"
     SIGN="-"; TS=""
 fi
-# erst alle eingebetteten Binaries, dann Frameworks, dann die App selbst
+# sign all embedded binaries first, then frameworks, then the app itself
 find "$APP/Contents" -type f \( -name "*.so" -o -name "*.dylib" \) \
     -exec codesign --force $TS -s "$SIGN" {} +
 find "$APP/Contents/Frameworks" -maxdepth 1 -name "*.framework" \
     -exec codesign --force $TS -s "$SIGN" {} + 2>/dev/null || true
 codesign --force $TS --entitlements entitlements.plist -s "$SIGN" "$APP"
-codesign --verify --strict "$APP" && echo "Signatur OK"
+codesign --verify --strict "$APP" && echo "Signature OK"
 
 if [ -n "$IDENTITY_PKG" ]; then
     productbuild --component "$APP" /Applications \
         --sign "$IDENTITY_PKG" "dist/$APP_NAME.pkg"
     echo
-    echo "Fertig: dist/$APP_NAME.pkg – jetzt mit der Transporter-App hochladen."
+    echo "Done: dist/$APP_NAME.pkg - upload it with the Transporter app."
 else
-    echo "IDENTITY_PKG nicht gesetzt – .pkg übersprungen (Trockenlauf)."
+    echo "IDENTITY_PKG not set - skipped .pkg (dry run)."
 fi

@@ -37,7 +37,7 @@ def iter_capture(path):
     with open(path, 'rb') as f:
         magic = f.read(4)
         if len(magic) < 4:
-            raise ValueError("Datei ist zu kurz / leer")
+            raise ValueError("File is too short / empty")
         if magic == b'\x0a\x0d\x0d\x0a':
             f.seek(0)
             yield from _iter_pcapng(f)
@@ -45,7 +45,7 @@ def iter_capture(path):
                        b'\xa1\xb2\x3c\x4d', b'\x4d\x3c\xb2\xa1'):
             yield from _iter_pcap(f, magic)
         else:
-            raise ValueError("Kein pcap/pcapng Format (unbekannte Magic Bytes)")
+            raise ValueError("Not a pcap/pcapng file (unknown magic bytes)")
 
 
 def _iter_pcap(f, magic):
@@ -479,21 +479,21 @@ def jxs_ffmpeg_hint(pattern='frame%05d.jxs', fps=25.0):
     """User-facing instructions for decoding exported .jxs frames externally."""
     f = (f"{fps:.2f}".rstrip('0').rstrip('.')) if fps else '25'
     return (
-        "JPEG-XS-Frames extern anschauen:\n"
+        "Viewing exported JPEG XS frames externally:\n"
         "\n"
-        "1. FFmpeg mit JPEG-XS-Decoder installieren – ein Build mit dem\n"
-        "   SVT-JPEG-XS-Plugin (Anleitung im Repo:\n"
-        "   github.com/OpenVisualCloud/SVT-JPEG-XS, Ordner ffmpeg-plugin;\n"
-        "   Standard-FFmpeg aus Homebrew & Co. kann JPEG XS meist NICHT).\n"
+        "1. Install an FFmpeg with JPEG XS decoding - a build that includes\n"
+        "   the SVT-JPEG-XS plugin (instructions in the repo:\n"
+        "   github.com/OpenVisualCloud/SVT-JPEG-XS, folder ffmpeg-plugin;\n"
+        "   stock FFmpeg from Homebrew etc. usually can NOT decode JPEG XS).\n"
         "\n"
-        "2. Einzelnes Frame als PNG:\n"
-        "   ffmpeg -i frame.jxs bild.png\n"
+        "2. Single frame as PNG:\n"
+        "   ffmpeg -i frame.jxs image.png\n"
         "\n"
-        f"3. Frame-Sequenz als Film ({f} fps):\n"
-        f"   ffmpeg -framerate {f} -i {pattern} -c:v prores_ks film.mov\n"
+        f"3. Frame sequence as a movie ({f} fps):\n"
+        f"   ffmpeg -framerate {f} -i {pattern} -c:v prores_ks movie.mov\n"
         "\n"
-        "Alternativ dekodiert das Kommandozeilen-Tool des SVT-Projekts\n"
-        "(SvtJpegxsDecApp) einzelne Codestreams ohne FFmpeg."
+        "Alternatively, the SVT project's command-line tool (SvtJpegxsDecApp)\n"
+        "decodes individual codestreams without FFmpeg."
     )
 
 
@@ -508,7 +508,7 @@ def export_video_frames(stream, outdir, sampling=DEFAULT_SAMPLING,
     written = []
     try_png = None  # None = unknown, probe on first frame
     if stream.kind == 'video-jxs':
-        hint_path = os.path.join(outdir, 'LIESMICH-JPEG-XS.txt')
+        hint_path = os.path.join(outdir, 'README-JPEG-XS.txt')
         with open(hint_path, 'w', encoding='utf-8') as f:
             f.write(jxs_ffmpeg_hint(f"{base}_frame%05d.jxs", stream.fps) + "\n")
         written.append(hint_path)
@@ -533,7 +533,7 @@ def export_video_frames(stream, outdir, sampling=DEFAULT_SAMPLING,
                     try_png = ok
         written.append(path)
         if progress:
-            progress(f"Frame {i + 1}/{len(frames)} exportiert …")
+            progress(f"Frame {i + 1}/{len(frames)} exported …")
     return written
 
 
@@ -714,8 +714,8 @@ class Stream:
 
     def media_desc(self):
         if self.kind == 'audio':
-            return f"L{self.guess_bits}, {self.guess_channels} Kanäle, {self.guess_rate} Hz"
-        names = {'video-raw': "Video roh (2110-20)", 'video-jxs': "JPEG XS (2110-22)"}
+            return f"L{self.guess_bits}, {self.guess_channels} ch, {self.guess_rate} Hz"
+        names = {'video-raw': "Raw video (2110-20)", 'video-jxs': "JPEG XS (2110-22)"}
         dim = f", {self.width}×{self.height}" if self.width else ""
         fps = ""
         if self.fps:
@@ -833,7 +833,7 @@ def collect_streams(path, progress=None):
     for wall, linktype, frame in iter_capture(path):
         n += 1
         if progress and n % 20000 == 0:
-            progress(f"{n:,} Pakete gelesen …")
+            progress(f"{n:,} packets read …")
         u = extract_udp(linktype, frame)
         if not u:
             # PTP over Ethernet (L2, Ethertype 0x88F7)?
@@ -886,21 +886,21 @@ def _swap_to_le(data, width):
 def render_pcm(stream, bits=None, channels=None, rate=None):
     """Return (pcm_le_bytes, channels, rate, sampwidth)."""
     if stream.kind != 'audio':
-        raise ValueError("Video-Stream – WAV-Export/Wiedergabe gibt es nur für Audio. "
-                         "Für Video: Frames exportieren bzw. Video-Vorschau.")
+        raise ValueError("Video stream - WAV export/playback is audio only. "
+                         "For video use the frame export / video preview.")
     bits = bits or stream.guess_bits
     channels = channels or stream.guess_channels
     rate = rate or stream.guess_rate
     width = bits // 8
     bpf = width * channels
     if bpf <= 0 or not stream.ordered:
-        raise ValueError("Stream hat keine dekodierbaren Audiodaten")
+        raise ValueError("Stream has no decodable audio data")
     first_ts = stream.ordered[0][1]
     last_ts = stream.ordered[-1][1]
     last_frames = len(stream.ordered[-1][2]) // bpf
     total_frames = (last_ts - first_ts) + max(last_frames, 1)
     if total_frames <= 0 or total_frames * bpf > 1 << 31:
-        raise ValueError("Unplausible Stream-Länge (RTP-Timestamps beschädigt?)")
+        raise ValueError("Implausible stream length (corrupt RTP timestamps?)")
     buf = bytearray(total_frames * bpf)
     for _eseq, ts, payload in stream.ordered:
         pos = (ts - first_ts) * bpf
@@ -932,7 +932,7 @@ def pcm_to_int16(pcm, width):
         out[0::2] = pcm[1::3]
         out[1::2] = pcm[2::3]
         return bytes(out)
-    raise ValueError("Nur 16/24 bit unterstützt")
+    raise ValueError("Only 16/24 bit supported")
 
 
 # ---------------------------------------------------------------------------
@@ -1049,17 +1049,17 @@ def run_gui(initial_file=None, selftest=False):
     # --- top bar -----------------------------------------------------------
     top = ttk.Frame(root, padding=(10, 8))
     top.pack(fill='x')
-    open_btn = ttk.Button(top, text="PCAP öffnen…")
+    open_btn = ttk.Button(top, text="Open PCAP…")
     open_btn.pack(side='left')
     only_mc = tk.BooleanVar(value=True)
-    ttk.Checkbutton(top, text="nur Multicast", variable=only_mc).pack(side='left', padx=(12, 0))
-    file_lbl = ttk.Label(top, text="Keine Datei geladen", foreground='gray')
+    ttk.Checkbutton(top, text="multicast only", variable=only_mc).pack(side='left', padx=(12, 0))
+    file_lbl = ttk.Label(top, text="No file loaded", foreground='gray')
     file_lbl.pack(side='left', padx=12)
 
     # --- stream table ------------------------------------------------------
     cols = ('addr', 'port', 'ssrc', 'pt', 'typ', 'pkts', 'lost', 'fmt', 'dur')
-    heads = ('Multicast-Adresse', 'Port', 'SSRC', 'PT', 'Typ', 'Pakete', 'Verlust',
-             'Format (erkannt)', 'Dauer')
+    heads = ('Multicast address', 'Port', 'SSRC', 'PT', 'Type', 'Packets', 'Lost',
+             'Format (detected)', 'Duration')
     widths = (160, 60, 100, 40, 60, 70, 60, 220, 80)
     mid = ttk.Frame(root, padding=(10, 0))
     mid.pack(fill='both', expand=True)
@@ -1073,24 +1073,24 @@ def run_gui(initial_file=None, selftest=False):
     vsb.pack(side='right', fill='y')
 
     # --- format overrides + export -----------------------------------------
-    fmt = ttk.LabelFrame(root, text="Format (Auto = automatisch erkannt)", padding=(10, 4))
+    fmt = ttk.LabelFrame(root, text="Format (Auto = as detected)", padding=(10, 4))
     fmt.pack(fill='x', padx=10, pady=(8, 0))
-    ttk.Label(fmt, text="Bittiefe:").pack(side='left')
+    ttk.Label(fmt, text="Bit depth:").pack(side='left')
     bits_cb = ttk.Combobox(fmt, values=('Auto', '16', '24'), width=6, state='readonly')
     bits_cb.set('Auto')
     bits_cb.pack(side='left', padx=(4, 14))
-    ttk.Label(fmt, text="Kanäle:").pack(side='left')
+    ttk.Label(fmt, text="Channels:").pack(side='left')
     ch_cb = ttk.Combobox(fmt, values=('Auto', '1', '2', '4', '6', '8', '16'), width=6, state='readonly')
     ch_cb.set('Auto')
     ch_cb.pack(side='left', padx=(4, 14))
-    ttk.Label(fmt, text="Samplerate:").pack(side='left')
+    ttk.Label(fmt, text="Sample rate:").pack(side='left')
     rate_cb = ttk.Combobox(fmt, values=('Auto',) + tuple(str(r) for r in STANDARD_RATES),
                            width=8, state='readonly')
     rate_cb.set('Auto')
     rate_cb.pack(side='left', padx=(4, 14))
-    export_btn = ttk.Button(fmt, text="Als WAV exportieren…", state='disabled')
+    export_btn = ttk.Button(fmt, text="Export as WAV…", state='disabled')
     export_btn.pack(side='right')
-    analyze_btn = ttk.Button(fmt, text="Analyse…", state='disabled')
+    analyze_btn = ttk.Button(fmt, text="Analysis…", state='disabled')
     analyze_btn.pack(side='right', padx=(0, 8))
     video_btn = ttk.Button(fmt, text="Video…", state='disabled')
     video_btn.pack(side='right', padx=(0, 8))
@@ -1102,7 +1102,7 @@ def run_gui(initial_file=None, selftest=False):
         return b, c, r
 
     # --- player -------------------------------------------------------------
-    pf = ttk.LabelFrame(root, text="Wiedergabe", padding=(10, 4))
+    pf = ttk.LabelFrame(root, text="Playback", padding=(10, 4))
     pf.pack(fill='x', padx=10, pady=8)
     play_btn = ttk.Button(pf, text="▶ Play", width=9, state='disabled')
     play_btn.grid(row=0, column=0, padx=(0, 4))
@@ -1117,10 +1117,10 @@ def run_gui(initial_file=None, selftest=False):
     play_lbl.grid(row=1, column=0, columnspan=4, sticky='w', pady=(2, 0))
     pf.columnconfigure(2, weight=1)
     if not player.available:
-        play_lbl.config(text="Wiedergabe deaktiviert – Paket 'sounddevice' fehlt "
-                             "(pip install sounddevice). Export funktioniert trotzdem.")
+        play_lbl.config(text="Playback disabled - package 'sounddevice' missing "
+                             "(pip install sounddevice). Export still works.")
 
-    status = ttk.Label(root, text="Bereit", padding=(10, 4), foreground='gray')
+    status = ttk.Label(root, text="Ready", padding=(10, 4), foreground='gray')
     status.pack(fill='x', side='bottom')
 
     def tfmt(sec):
@@ -1151,7 +1151,7 @@ def run_gui(initial_file=None, selftest=False):
         loaded_key[0] = None
         open_btn.config(state='disabled')
         export_btn.config(state='disabled')
-        status.config(text=f"Lade {os.path.basename(path)} …")
+        status.config(text=f"Loading {os.path.basename(path)} …")
 
         def work():
             try:
@@ -1170,8 +1170,8 @@ def run_gui(initial_file=None, selftest=False):
                     status.config(text=val)
                 elif kind == 'error':
                     open_btn.config(state='normal')
-                    status.config(text="Fehler beim Laden")
-                    messagebox.showerror("Fehler", val)
+                    status.config(text="Load failed")
+                    messagebox.showerror("Error", val)
                 elif kind == 'done':
                     path, result, npkts, ptpc = val
                     streams.clear()
@@ -1185,14 +1185,14 @@ def run_gui(initial_file=None, selftest=False):
                         state='normal' if any(s.kind != 'audio' for s in streams)
                         else 'disabled')
                     file_lbl.config(text=os.path.basename(path), foreground='')
-                    ptxt = (f" · PTP erkannt ({ptpc.n_points} Syncs)"
-                            if ptpc else " · kein PTP im Mitschnitt")
-                    status.config(text=f"{npkts:,} Pakete gelesen, "
-                                       f"{len(streams)} Stream(s) gefunden{ptxt}")
+                    ptxt = (f" · PTP detected ({ptpc.n_points} syncs)"
+                            if ptpc else " · no PTP in capture")
+                    status.config(text=f"{npkts:,} packets read, "
+                                       f"{len(streams)} stream(s) found{ptxt}")
                     if not streams:
                         messagebox.showinfo(
-                            "Keine Streams",
-                            "In dieser Datei wurden keine RTP/AES67-Audio-Streams erkannt.")
+                            "No streams",
+                            "No RTP / AES67 / ST 2110 streams detected in this file.")
                     elif selftest:
                         tree.selection_set(tree.get_children()[0])
                         open_analysis()
@@ -1207,8 +1207,8 @@ def run_gui(initial_file=None, selftest=False):
 
     def choose_file():
         path = filedialog.askopenfilename(
-            title="PCAP-Datei öffnen",
-            filetypes=[("Capture-Dateien", "*.pcap *.pcapng *.cap"), ("Alle Dateien", "*")])
+            title="Open PCAP file",
+            filetypes=[("Capture files", "*.pcap *.pcapng *.cap"), ("All files", "*")])
         if path:
             load_file(path)
     open_btn.config(command=choose_file)
@@ -1217,73 +1217,73 @@ def run_gui(initial_file=None, selftest=False):
     def do_export():
         sel = selected_streams()
         if not sel:
-            messagebox.showinfo("Export", "Bitte zuerst einen oder mehrere Streams auswählen.")
+            messagebox.showinfo("Export", "Select one or more streams first.")
             return
         sel = [s for s in sel if s.kind == 'audio']
         if not sel:
-            messagebox.showinfo("Export", "Video-Streams exportierst du über „Video…\".")
+            messagebox.showinfo("Export", "Use \"Video…\" to export video streams.")
             return
         b, c, r = fmt_overrides()
         try:
             if len(sel) == 1:
                 s = sel[0]
                 path = filedialog.asksaveasfilename(
-                    title="WAV speichern", defaultextension=".wav",
+                    title="Save WAV", defaultextension=".wav",
                     initialfile=s.default_filename(),
-                    filetypes=[("WAV-Datei", "*.wav")])
+                    filetypes=[("WAV file", "*.wav")])
                 if not path:
                     return
                 frames, ch, sr, w = export_wav(s, path, b, c, r)
-                status.config(text=f"Exportiert: {os.path.basename(path)} "
-                                   f"({frames:,} Frames, {ch} ch, {sr} Hz, {w * 8} bit)")
+                status.config(text=f"Exported: {os.path.basename(path)} "
+                                   f"({frames:,} frames, {ch} ch, {sr} Hz, {w * 8} bit)")
             else:
-                d = filedialog.askdirectory(title="Zielordner für WAV-Dateien")
+                d = filedialog.askdirectory(title="Destination folder for WAV files")
                 if not d:
                     return
                 for s in sel:
                     export_wav(s, os.path.join(d, s.default_filename()), b, c, r)
-                status.config(text=f"{len(sel)} Streams nach {d} exportiert")
+                status.config(text=f"Exported {len(sel)} streams to {d}")
         except Exception as e:
-            messagebox.showerror("Export fehlgeschlagen", str(e))
+            messagebox.showerror("Export failed", str(e))
     export_btn.config(command=do_export)
 
     # --- analysis window ------------------------------------------------------
     def open_analysis():
         sel = selected_streams()
         if not sel:
-            messagebox.showinfo("Analyse", "Bitte zuerst einen Stream auswählen.")
+            messagebox.showinfo("Analysis", "Select a stream first.")
             return
         s = sel[0]
         q = s.quality()
         ptpc = ptp_holder[0]
         pseries, pstats = (s.ptp_offsets(ptpc) if ptpc else (None, None))
         win = tk.Toplevel(root)
-        win.title(f"Analyse – {s.label()}")
+        win.title(f"Analysis – {s.label()}")
         win.geometry("940x760" if pseries else "940x640")
         win.minsize(700, 480)
 
         info = ttk.Frame(win, padding=(12, 10))
         info.pack(fill='x')
         pairs = (
-            ("Pakete empfangen", f"{q['received']:,} von {q['expected']:,}"),
-            ("Verloren", f"{q['lost']:,} ({q['loss_pct']:.3f} %)"),
-            ("Dupliziert", f"{q['dups']:,}"),
-            ("Umsortiert", f"{q['reordered']:,}"),
+            ("Packets received", f"{q['received']:,} of {q['expected']:,}"),
+            ("Lost", f"{q['lost']:,} ({q['loss_pct']:.3f} %)"),
+            ("Duplicates", f"{q['dups']:,}"),
+            ("Reordered", f"{q['reordered']:,}"),
             ("Jitter (RFC 3550)", f"{q['jitter_ms']:.3f} ms"),
-            ("Max. Laufzeitabweichung", f"{q['jitter_max_ms']:.3f} ms"),
-            ("Paketabstand soll / mittel", f"{q['ia_expected_ms']:.3f} / {q['ia_mean_ms']:.3f} ms"),
-            ("Abstand min / max / σ", f"{q['ia_min_ms']:.3f} / {q['ia_max_ms']:.3f} / "
+            ("Max transit deviation", f"{q['jitter_max_ms']:.3f} ms"),
+            ("Packet spacing nominal / mean", f"{q['ia_expected_ms']:.3f} / {q['ia_mean_ms']:.3f} ms"),
+            ("Spacing min / max / σ", f"{q['ia_min_ms']:.3f} / {q['ia_max_ms']:.3f} / "
                                       f"{q['ia_std_ms']:.3f} ms"),
         )
         if pstats:
             pairs += (
-                ("RTP vs. PTP (Median)", f"{pstats['median']:+.3f} ms"),
+                ("RTP vs. PTP (median)", f"{pstats['median']:+.3f} ms"),
                 ("RTP vs. PTP (σ)", f"{pstats['std']:.3f} ms"),
-                ("Drift zur PTP-Uhr", f"{pstats['drift_ppm']:+.2f} ppm"),
-                ("PTP-Referenz", f"{ptpc.n_points} Syncs, Fit ±{ptpc.resid_ms:.2f} ms"),
+                ("Drift vs. PTP clock", f"{pstats['drift_ppm']:+.2f} ppm"),
+                ("PTP reference", f"{ptpc.n_points} syncs, fit ±{ptpc.resid_ms:.2f} ms"),
             )
         elif ptpc is None:
-            pairs += (("PTP", "nicht im Mitschnitt"),)
+            pairs += (("PTP", "not in capture"),)
         for i, (k, v) in enumerate(pairs):
             r, c = divmod(i, 4)
             cell = ttk.Frame(info)
@@ -1291,13 +1291,13 @@ def run_gui(initial_file=None, selftest=False):
             ttk.Label(cell, text=k, foreground='gray').pack(anchor='w')
             ttk.Label(cell, text=v, font=('', 14, 'bold')).pack(anchor='w')
 
-        evf = ttk.LabelFrame(win, text=f"Verlust-Ereignisse ({len(q['events'])})", padding=(8, 4))
+        evf = ttk.LabelFrame(win, text=f"Loss events ({len(q['events'])})", padding=(8, 4))
         evf.pack(side='bottom', fill='x', padx=10, pady=(0, 10))
         if q['events']:
             evt = ttk.Treeview(evf, columns=('t', 'wall', 'seq', 'cnt'), show='headings',
                                height=min(6, len(q['events'])))
-            for c, h, w in (('t', "Zeit im Stream", 130), ('wall', "Uhrzeit (Capture)", 150),
-                            ('seq', "ab Sequenznr.", 120), ('cnt', "fehlende Pakete", 120)):
+            for c, h, w in (('t', "Time in stream", 130), ('wall', "Capture time", 150),
+                            ('seq', "From seq no.", 120), ('cnt', "Missing packets", 120)):
                 evt.heading(c, text=h)
                 evt.column(c, width=w, anchor='w')
             esb = ttk.Scrollbar(evf, orient='vertical', command=evt.yview)
@@ -1310,7 +1310,7 @@ def run_gui(initial_file=None, selftest=False):
                     time.strftime('%H:%M:%S', time.localtime(wall)) + f".{int(wall % 1 * 1000):03d}",
                     seq & 0xFFFF, cnt))
         else:
-            ttk.Label(evf, text="Keine Paketverluste erkannt ✓").pack(anchor='w')
+            ttk.Label(evf, text="No packet loss detected ✓").pack(anchor='w')
 
         cv = tk.Canvas(win, background='white', highlightthickness=0)
         cv.pack(fill='both', expand=True, padx=10, pady=4)
@@ -1353,8 +1353,8 @@ def run_gui(initial_file=None, selftest=False):
                 if len(pts) >= 4:
                     cv2.create_line(*pts, fill='#8e63ce', width=2)
                 cv2.create_text(L + 4, 10, anchor='w', font=('', 10), fill='#8e63ce',
-                                text="Versatz RTP-Timestamp zur PTP-Zeit (ms) — "
-                                     "positiv = Timestamp liegt zurück (Latenz)")
+                                text="RTP timestamp offset vs. PTP time (ms) — "
+                                     "positive = timestamp lags PTP (latency)")
             cv2.bind('<Configure>', draw2)
 
         def draw(_ev=None):
@@ -1364,7 +1364,7 @@ def run_gui(initial_file=None, selftest=False):
                 return
             ia_s, j_s = q['ia_series'], q['jitter_series']
             if not ia_s:
-                cv.create_text(W // 2, H // 2, text="Zu wenige Pakete für Timing-Analyse")
+                cv.create_text(W // 2, H // 2, text="Too few packets for timing analysis")
                 return
             L, R, T, B = 58, 16, 26, 30
             pw, ph = W - L - R, H - T - B
@@ -1411,10 +1411,10 @@ def run_gui(initial_file=None, selftest=False):
             if len(pts) >= 4:
                 cv.create_line(*pts, fill='#e69138', width=2)
             lx = L
-            for txt, colr in (("▮ Paketabstand (ms)", '#6fa8dc'),
+            for txt, colr in (("▮ Packet spacing (ms)", '#6fa8dc'),
                               ("▬ Jitter RFC 3550 (ms)", '#e69138'),
-                              ("│ Paketverlust", '#e05050'),
-                              ("┄ Soll-Abstand", '#888')):
+                              ("│ Packet loss", '#e05050'),
+                              ("┄ Nominal spacing", '#888')):
                 item = cv.create_text(lx, 12, anchor='w', font=('', 10), fill=colr, text=txt)
                 lx = cv.bbox(item)[2] + 18
         cv.bind('<Configure>', draw)
@@ -1425,7 +1425,7 @@ def run_gui(initial_file=None, selftest=False):
     def open_video():
         vsel = [s for s in selected_streams() if s.kind != 'audio']
         if not vsel:
-            messagebox.showinfo("Video", "Bitte einen Video-Stream auswählen.")
+            messagebox.showinfo("Video", "Select a video stream first.")
             return
         s = vsel[0]
         frames = s.frames()
@@ -1436,16 +1436,16 @@ def run_gui(initial_file=None, selftest=False):
 
         top = ttk.Frame(win, padding=(10, 8))
         top.pack(fill='x')
-        ttk.Label(top, text=f"{s.media_desc()}, {len(frames)} Frames").pack(side='left')
+        ttk.Label(top, text=f"{s.media_desc()}, {len(frames)} frames").pack(side='left')
         samp_cb = None
         if s.kind == 'video-raw':
             ttk.Label(top, text="  Sampling:").pack(side='left', padx=(10, 2))
             samp_cb = ttk.Combobox(top, values=list(SAMPLINGS), width=17, state='readonly')
             samp_cb.set(DEFAULT_SAMPLING)
             samp_cb.pack(side='left')
-        expall_btn = ttk.Button(top, text="Alle Frames exportieren…")
+        expall_btn = ttk.Button(top, text="Export all frames…")
         expall_btn.pack(side='right')
-        exp1_btn = ttk.Button(top, text="Frame exportieren…")
+        exp1_btn = ttk.Button(top, text="Export frame…")
         exp1_btn.pack(side='right', padx=(0, 8))
 
         cv = tk.Canvas(win, background='#1c1c1c', highlightthickness=0)
@@ -1496,7 +1496,7 @@ def run_gui(initial_file=None, selftest=False):
             job = state['job']
             update_flabel()
             if s.kind == 'video-raw':
-                vstatus.config(text="Dekodiere Frame …")
+                vstatus.config(text="Decoding frame …")
                 samp = cur_sampling()
 
                 def work():
@@ -1505,9 +1505,9 @@ def run_gui(initial_file=None, selftest=False):
                                                      s.height, samp)
                         vq.put((job, 'rgb', (w, h, rgb)))
                     except Exception as e:
-                        vq.put((job, 'status', f"Dekodierfehler: {e}"))
+                        vq.put((job, 'status', f"Decode error: {e}"))
             else:
-                vstatus.config(text="Dekodiere via FFmpeg …")
+                vstatus.config(text="Decoding via FFmpeg …")
 
                 def work():
                     import tempfile
@@ -1521,11 +1521,11 @@ def run_gui(initial_file=None, selftest=False):
                                     vq.put((job, 'png', f.read()))
                             else:
                                 vq.put((job, 'jxshelp',
-                                        "Keine Vorschau möglich: kein FFmpeg mit "
-                                        "JPEG-XS-Decoder gefunden.\n\n" +
+                                        "No preview possible: no FFmpeg with a "
+                                        "JPEG XS decoder found.\n\n" +
                                         jxs_ffmpeg_hint(fps=s.fps)))
                     except Exception as e:
-                        vq.put((job, 'status', f"Dekodierfehler: {e}"))
+                        vq.put((job, 'status', f"Decode error: {e}"))
             threading.Thread(target=work, daemon=True).start()
 
         def vpoll():
@@ -1551,9 +1551,9 @@ def run_gui(initial_file=None, selftest=False):
                             24, 24, anchor='nw', text=val, fill='#ddd',
                             font=('Menlo', 12), justify='left',
                             width=max(cv.winfo_width() - 48, 300))
-                        vstatus.config(text="Analyse und Export als .jxs "
-                                            "funktionieren trotzdem – die Anleitung "
-                                            "liegt auch jedem Export als Textdatei bei.")
+                        vstatus.config(text="Analysis and .jxs export still work - "
+                                            "these instructions are also written as a "
+                                            "text file next to every export.")
                     else:
                         vstatus.config(text=val)
             except queue.Empty:
@@ -1583,10 +1583,10 @@ def run_gui(initial_file=None, selftest=False):
                 with open(path, 'wb') as f:
                     f.write(frame_codestream(i))
                 ffmpeg_jxs_to_png(path, path[:-4] + '.png')  # opportunistic
-            vstatus.config(text=f"Exportiert: {os.path.basename(path)}")
+            vstatus.config(text=f"Exported: {os.path.basename(path)}")
 
         def do_expall():
-            d = filedialog.askdirectory(parent=win, title="Zielordner für Frames")
+            d = filedialog.askdirectory(parent=win, title="Destination folder for frames")
             if not d:
                 return
             samp = cur_sampling()
@@ -1595,9 +1595,9 @@ def run_gui(initial_file=None, selftest=False):
                 try:
                     files = export_video_frames(
                         s, d, samp, progress=lambda t: vq.put((-1, 'status', t)))
-                    vq.put((-1, 'status', f"{len(files)} Datei(en) exportiert nach {d}"))
+                    vq.put((-1, 'status', f"Exported {len(files)} file(s) to {d}"))
                 except Exception as e:
-                    vq.put((-1, 'status', f"Export fehlgeschlagen: {e}"))
+                    vq.put((-1, 'status', f"Export failed: {e}"))
             threading.Thread(target=work, daemon=True).start()
 
         exp1_btn.config(command=do_exp1)
@@ -1619,7 +1619,7 @@ def run_gui(initial_file=None, selftest=False):
             return False
         s = sel[0]
         if s.kind != 'audio':
-            messagebox.showinfo("Wiedergabe", "Video-Streams: Vorschau über „Video…\".")
+            messagebox.showinfo("Playback", "Video streams: use \"Video…\" for preview.")
             return False
         key = (id(s), fmt_overrides())
         if loaded_key[0] == key and player.pcm:
@@ -1629,11 +1629,11 @@ def run_gui(initial_file=None, selftest=False):
             pcm, ch, sr, w = render_pcm(s, b, c, r)
             player.load(pcm_to_int16(pcm, w), ch, sr)
         except Exception as e:
-            messagebox.showerror("Wiedergabe", str(e))
+            messagebox.showerror("Playback", str(e))
             return False
         loaded_key[0] = key
         slider.config(to=max(player.duration, 0.001), state='normal')
-        play_lbl.config(text=f"Geladen: {s.label()}  –  L{w * 8}, {ch} ch, {sr} Hz")
+        play_lbl.config(text=f"Loaded: {s.label()}  –  L{w * 8}, {ch} ch, {sr} Hz")
         return True
 
     def toggle_play():
@@ -1696,20 +1696,21 @@ def run_gui(initial_file=None, selftest=False):
 # ---------------------------------------------------------------------------
 
 def main():
-    ap = argparse.ArgumentParser(description="AES67 PCAP -> WAV extractor & player")
-    ap.add_argument('pcap', nargs='?', help="pcap/pcapng Datei")
-    ap.add_argument('--list', action='store_true', help="Streams auflisten (kein GUI)")
+    ap = argparse.ArgumentParser(
+        description="ST 2110 / AES67 PCAP stream viewer, extractor & analyzer")
+    ap.add_argument('pcap', nargs='?', help="pcap/pcapng file")
+    ap.add_argument('--list', action='store_true', help="list streams (no GUI)")
     ap.add_argument('--export', nargs=2, metavar=('N', 'OUT'),
-                    help="Stream Nr. N (aus --list) als WAV exportieren")
+                    help="export stream no. N (from --list) as WAV")
     ap.add_argument('--analyze', type=int, metavar='N',
-                    help="Verlust-/Jitter-Analyse für Stream Nr. N")
+                    help="loss/jitter/PTP analysis for stream no. N")
     ap.add_argument('--export-frames', nargs=2, metavar=('N', 'DIR'),
-                    help="Video-Stream N: Frames exportieren (2110-20 → PNG, "
-                         "JPEG XS → .jxs, + .png falls FFmpeg JPEG XS kann)")
+                    help="video stream N: export frames (2110-20 -> PNG, "
+                         "JPEG XS -> .jxs, + .png if FFmpeg can decode JPEG XS)")
     ap.add_argument('--frames', metavar='A-B',
-                    help="Frame-Bereich für --export-frames, z. B. 0-24")
+                    help="frame range for --export-frames, e.g. 0-24")
     ap.add_argument('--sampling', choices=tuple(SAMPLING_CLI), default='422-10',
-                    help="Pixelformat für 2110-20 (Standard: 422-10)")
+                    help="pixel format for 2110-20 (default: 422-10)")
     ap.add_argument('--bits', type=int, choices=(16, 24))
     ap.add_argument('--channels', type=int)
     ap.add_argument('--rate', type=int)
@@ -1722,67 +1723,67 @@ def main():
         return
 
     if not args.pcap:
-        ap.error("PCAP-Datei angeben")
+        ap.error("specify a pcap file")
     streams, npkts, ptpc = collect_streams(args.pcap)
     if args.list:
-        ptxt = (f", PTP erkannt ({ptpc.n_points} Syncs, Domain "
+        ptxt = (f", PTP detected ({ptpc.n_points} syncs, domain "
                 f"{'/'.join(str(d) for d in sorted(ptpc.domains))})"
-                if ptpc else ", kein PTP")
-        print(f"{npkts:,} Pakete, {len(streams)} Stream(s){ptxt}:")
+                if ptpc else ", no PTP")
+        print(f"{npkts:,} packets, {len(streams)} stream(s){ptxt}:")
         for i, s in enumerate(streams, 1):
-            mc = '' if s.is_multicast else ' (Unicast)'
+            mc = '' if s.is_multicast else ' (unicast)'
             print(f"  [{i}] {s.dst_ip}:{s.dst_port}{mc}  SSRC 0x{s.ssrc:08X}  PT {s.pt}  "
-                  f"{len(s.ordered)} Pakete ({s.lost} verloren)  "
+                  f"{len(s.ordered)} packets ({s.lost} lost)  "
                   f"{s.media_desc()}  {s.duration:.2f}s")
     if args.analyze is not None:
         n = args.analyze
         if not 1 <= n <= len(streams):
-            sys.exit(f"Stream {n} existiert nicht (1..{len(streams)})")
+            sys.exit(f"Stream {n} does not exist (1..{len(streams)})")
         s = streams[n - 1]
         q = s.quality()
-        print(f"Analyse [{n}] {s.label()}  (PT {s.pt}, {s.media_desc()})")
-        print(f"  Pakete:   {q['received']:,} empfangen von {q['expected']:,} erwartet | "
-              f"verloren: {q['lost']:,} ({q['loss_pct']:.3f} %) | "
-              f"dupliziert: {q['dups']} | umsortiert: {q['reordered']}")
+        print(f"Analysis [{n}] {s.label()}  (PT {s.pt}, {s.media_desc()})")
+        print(f"  Packets:  {q['received']:,} received of {q['expected']:,} expected | "
+              f"lost: {q['lost']:,} ({q['loss_pct']:.3f} %) | "
+              f"duplicates: {q['dups']} | reordered: {q['reordered']}")
         print(f"  Jitter:   {q['jitter_ms']:.3f} ms (RFC 3550) | "
-              f"max. Laufzeitabweichung {q['jitter_max_ms']:.3f} ms")
-        print(f"  Abstand:  soll {q['ia_expected_ms']:.3f} ms | mittel {q['ia_mean_ms']:.3f} ms | "
+              f"max transit deviation {q['jitter_max_ms']:.3f} ms")
+        print(f"  Spacing:  nominal {q['ia_expected_ms']:.3f} ms | mean {q['ia_mean_ms']:.3f} ms | "
               f"min {q['ia_min_ms']:.3f} | max {q['ia_max_ms']:.3f} | σ {q['ia_std_ms']:.3f} ms")
         if ptpc:
             _ser, ps = s.ptp_offsets(ptpc)
-            print(f"  PTP:      Versatz RTP-Timestamp zu PTP: Median {ps['median']:+.3f} ms | "
+            print(f"  PTP:      RTP timestamp offset vs. PTP: median {ps['median']:+.3f} ms | "
                   f"σ {ps['std']:.3f} ms | min {ps['min']:+.3f} | max {ps['max']:+.3f} ms | "
-                  f"Drift {ps['drift_ppm']:+.2f} ppm")
-            print(f"            (GM {ptpc.gm}, {ptpc.n_points} Syncs, "
-                  f"Fit-Residuum ±{ptpc.resid_ms:.2f} ms)")
+                  f"drift {ps['drift_ppm']:+.2f} ppm")
+            print(f"            (GM {ptpc.gm}, {ptpc.n_points} syncs, "
+                  f"fit residual ±{ptpc.resid_ms:.2f} ms)")
         else:
-            print("  PTP:      keine Sync/Follow_Up-Messages im Mitschnitt")
+            print("  PTP:      no Sync/Follow_Up messages in capture")
         if q['events']:
-            print(f"  Verlust-Ereignisse ({len(q['events'])}):")
+            print(f"  Loss events ({len(q['events'])}):")
             for seq, cnt, tpos, _wall in q['events'][:20]:
-                print(f"    @ {tpos:8.3f}s  ab Seq {seq & 0xFFFF}: {cnt} Paket(e) fehlen")
+                print(f"    @ {tpos:8.3f}s  from seq {seq & 0xFFFF}: {cnt} packet(s) missing")
             if len(q['events']) > 20:
-                print(f"    … und {len(q['events']) - 20} weitere")
+                print(f"    … and {len(q['events']) - 20} more")
     if args.export:
         n, out = int(args.export[0]), args.export[1]
         if not 1 <= n <= len(streams):
-            sys.exit(f"Stream {n} existiert nicht (1..{len(streams)})")
+            sys.exit(f"Stream {n} does not exist (1..{len(streams)})")
         frames, ch, sr, w = export_wav(streams[n - 1], out, args.bits, args.channels, args.rate)
-        print(f"OK: {out}  {frames:,} Frames, {ch} ch, {sr} Hz, {w * 8} bit")
+        print(f"OK: {out}  {frames:,} frames, {ch} ch, {sr} Hz, {w * 8} bit")
     if args.export_frames:
         n, outdir = int(args.export_frames[0]), args.export_frames[1]
         if not 1 <= n <= len(streams):
-            sys.exit(f"Stream {n} existiert nicht (1..{len(streams)})")
+            sys.exit(f"Stream {n} does not exist (1..{len(streams)})")
         s = streams[n - 1]
         if s.kind == 'audio':
-            sys.exit(f"Stream {n} ist Audio – dafür --export nutzen")
+            sys.exit(f"Stream {n} is audio - use --export instead")
         indices = None
         if args.frames:
             a, _, b = args.frames.partition('-')
             indices = range(int(a), int(b or a) + 1)
         os.makedirs(outdir, exist_ok=True)
         files = export_video_frames(s, outdir, SAMPLING_CLI[args.sampling], indices)
-        print(f"OK: {len(files)} Datei(en) nach {outdir}")
+        print(f"OK: {len(files)} file(s) written to {outdir}")
         if s.kind == 'video-jxs' and not any(p.endswith('.png') for p in files):
             print("\n" + jxs_ffmpeg_hint(fps=s.fps))
 

@@ -8,5 +8,5 @@ if not exist .venv\Scripts\python.exe (
 .venv\Scripts\pip install --quiet pyinstaller
 .venv\Scripts\pyinstaller --noconfirm --windowed --onefile --name "ST2110 AES67 Stream Viewer" aes67_pcap_to_wav.py
 echo.
-echo Fertig: dist\ST2110 AES67 Stream Viewer.exe
+echo Done: dist\ST2110 AES67 Stream Viewer.exe
 pause

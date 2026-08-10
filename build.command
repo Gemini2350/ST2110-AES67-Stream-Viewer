@@ -14,5 +14,5 @@ fi
 xattr -cr "dist/ST2110 AES67 Stream Viewer.app"
 codesign --force --deep -s - "dist/ST2110 AES67 Stream Viewer.app"
 echo
-echo "Fertig: dist/ST2110 AES67 Stream Viewer.app"
+echo "Done: dist/ST2110 AES67 Stream Viewer.app"
 open dist

@@ -2,104 +2,98 @@
 
 ![build](https://github.com/Gemini2350/ST2110-AES67-Stream-Viewer/actions/workflows/build.yml/badge.svg)
 
-**Downloads:** Fertige Builds für macOS (Apple Silicon + Intel) und Windows
-entstehen automatisch per GitHub Actions – bei jedem Release unter
+**Downloads:** Ready-made builds for macOS (Apple Silicon + Intel) and Windows
+are produced automatically by GitHub Actions — for every release under
 [Releases](https://github.com/Gemini2350/ST2110-AES67-Stream-Viewer/releases),
-Zwischenstände als Artifacts der [Action-Läufe](https://github.com/Gemini2350/ST2110-AES67-Stream-Viewer/actions).
+intermediate builds as artifacts of the
+[action runs](https://github.com/Gemini2350/ST2110-AES67-Stream-Viewer/actions).
 
-Grafisches Tool, das AES67-Audio- und ST-2110-Video-Streams aus
-`.pcap`/`.pcapng`-Mitschnitten (z. B. aus Wireshark) extrahiert:
+A GUI tool that extracts AES67 audio and ST 2110 video streams from
+`.pcap`/`.pcapng` captures (e.g. from Wireshark):
 
-- Listet alle erkannten Streams nach **Multicast-Adresse**, Port, SSRC und Payload Type
-- **Audio (AES67 / 2110-30/-31):** Format-Erkennung (L16/L24, Kanäle, Samplerate,
-  übersteuerbar), **Export als WAV**, **Wiedergabe** mit Play/Pause und Zeitbalken
-- **Video unkomprimiert (2110-20, RFC 4175):** Auflösung/Framerate werden aus den
-  Payload-Headern erkannt, Frame-Vorschau mit Scrubbing-Balken, Export als **PNG**
-  (Sampling wählbar: YCbCr 4:2:2 10/8 bit, RGB 8 bit)
-- **JPEG XS (2110-22 / IPMX, RFC 9134):** Erkennung inkl. Auflösung aus dem
-  Picture Header, Export der Frames als **.jxs**-Codestreams; Vorschau/PNG
-  zusätzlich, wenn ein FFmpeg mit JPEG-XS-Decoder installiert ist
-- **Analyse** pro Stream (Audio und Video): Paketverlust anhand der
-  RTP-Sequenznummern (Ereignisliste mit Zeitpunkt und Anzahl), Jitter nach
-  RFC 3550, Paketabstands-Statistik und Zeitverlaufs-Graph
-- **PTP-Vergleich:** Enthält der Mitschnitt PTP-Sync/Follow_Up-Messages
-  (UDP 319/320 oder Layer 2), wird die Grandmaster-Zeit rekonstruiert und
-  pro Stream der Versatz der RTP-Timestamps zur PTP-Uhr gemessen
-  (Median/σ/Drift in ppm + Verlaufskurve) – zeigt sofort, ob ein Sender
-  PTP-gelockt ist
-- Paketverluste werden angezeigt und beim Export/Abspielen mit Stille aufgefüllt,
-  umsortierte Pakete werden korrekt einsortiert (RTP-Sequenz/-Timestamp)
+- Lists all detected streams by **multicast address**, port, SSRC and payload type
+- **Audio (AES67 / 2110-30/-31):** format detection (L16/L24, channels, sample
+  rate — overridable), **WAV export**, **playback** with play/pause and seek bar
+- **Uncompressed video (2110-20, RFC 4175):** resolution/frame rate detected
+  from the payload headers, frame preview with scrubbing, export as **PNG**
+  (selectable sampling: YCbCr 4:2:2 10/8 bit, RGB 8 bit)
+- **JPEG XS (2110-22 / IPMX, RFC 9134):** detection incl. resolution from the
+  picture header, frame export as **.jxs** codestreams; preview/PNG additionally
+  when an FFmpeg with JPEG XS decoding is installed
+- **Analysis** per stream (audio and video): packet loss from RTP sequence
+  numbers (event list with time and count), RFC 3550 jitter, packet spacing
+  statistics and a timing graph
+- **PTP comparison:** if the capture contains PTP Sync/Follow_Up messages
+  (UDP 319/320 or layer 2), the grandmaster time is reconstructed and each
+  stream's RTP timestamps are compared against the PTP clock
+  (median/σ/drift in ppm + graph) — instantly shows whether a sender is
+  PTP-locked
+- Packet loss is flagged and filled with silence on export/playback,
+  reordered packets are re-sorted correctly (RTP sequence/timestamp)
 
-Läuft auf **macOS und Windows** (und Linux), Python ≥ 3.9 mit tkinter.
+Runs on **macOS and Windows** (and Linux), Python ≥ 3.9 with tkinter.
 
-## Starten
+## Running from source
 
-- **macOS:** Doppelklick auf `run.command` (oder `./run.command` im Terminal).
-  Beim ersten Start wird automatisch eine lokale Python-Umgebung mit `sounddevice`
-  (für die Wiedergabe) angelegt.
-- **Windows:** Doppelklick auf `run.bat`.
-- **Direkt:** `python3 aes67_pcap_to_wav.py` – ohne das Paket `sounddevice`
-  ist nur die Wiedergabe deaktiviert, der Export funktioniert immer.
+- **macOS:** double-click `run.command` (or `./run.command` in a terminal).
+  On first start a local Python environment with `sounddevice` (for playback)
+  is created automatically.
+- **Windows:** double-click `run.bat`.
+- **Directly:** `python3 aes67_pcap_to_wav.py` — without the `sounddevice`
+  package only playback is disabled, export always works.
 
-Falls tkinter fehlt (Homebrew-Python): `brew install python-tk`
+If tkinter is missing (Homebrew Python): `brew install python-tk`
 
-## Kommandozeile
+## Command line
 
 ```
 python3 aes67_pcap_to_wav.py capture.pcap --list
 python3 aes67_pcap_to_wav.py capture.pcap --export 1 out.wav [--bits 24] [--channels 2] [--rate 48000]
-python3 aes67_pcap_to_wav.py capture.pcap --analyze 1   # Verlust-/Jitter-Analyse
+python3 aes67_pcap_to_wav.py capture.pcap --analyze 1   # loss/jitter/PTP analysis
 python3 aes67_pcap_to_wav.py capture.pcap --export-frames 3 frames/ [--frames 0-24] [--sampling 422-10]
 ```
 
-## Eigenständige App bauen (One-Click, ohne Python)
+A synthetic test capture (audio + video + PTP) can be generated with
+`python3 make_test_pcap.py test.pcap test.pcapng`.
 
-PyInstaller kann nicht cross-kompilieren: die `.app` auf einem Mac bauen,
-die `.exe` auf einem Windows-Rechner.
+## Building standalone apps locally
 
-- **macOS:** Doppelklick auf `build.command` → `dist/ST2110 AES67 Stream Viewer.app` (~28 MB).
-  Das Skript erledigt auch `xattr -cr` + Ad-hoc-`codesign` (ohne das verweigert
-  macOS den Start). Manuell:
+PyInstaller cannot cross-compile: build the `.app` on a Mac,
+the `.exe` on a Windows machine. (Or let GitHub Actions do it — see above.)
 
-  ```
-  ./.venv/bin/pip install pyinstaller
-  ./.venv/bin/pyinstaller --noconfirm --windowed --name "ST2110 AES67 Stream Viewer" aes67_pcap_to_wav.py
-  xattr -cr "dist/ST2110 AES67 Stream Viewer.app" && codesign --force --deep -s - "dist/ST2110 AES67 Stream Viewer.app"
-  ```
+- **macOS:** double-click `build.command` → `dist/ST2110 AES67 Stream Viewer.app`.
+  The script also handles `xattr -cr` + ad-hoc `codesign` (without which
+  macOS refuses to launch the app).
+- **Windows:** install Python from python.org (check "Add to PATH"),
+  then double-click `build.bat` → `dist/ST2110 AES67 Stream Viewer.exe`.
 
-- **Windows:** Python von python.org installieren (Häkchen „Add to PATH"),
-  dann Doppelklick auf `build.bat` → `dist/ST2110 AES67 Stream Viewer.exe`. Manuell:
+**Mac App Store:** the full process is described in [APPSTORE.md](APPSTORE.md)
+(`build_appstore.command` produces the sandboxed, signed store build as .pkg).
 
-  ```
-  py -3 -m venv .venv
-  .venv\Scripts\pip install sounddevice pyinstaller
-  .venv\Scripts\pyinstaller --noconfirm --windowed --onefile --name "ST2110 AES67 Stream Viewer" aes67_pcap_to_wav.py
-  ```
+Notes on distributing to others:
 
-**Mac App Store:** kompletter Ablauf in [APPSTORE.md](APPSTORE.md)
-(`build_appstore.command` baut den sandboxed, signierten Store-Build als .pkg).
+- **macOS:** The ad-hoc signature is fine for your own machine. On other Macs,
+  Gatekeeper blocks downloaded apps → right-click → "Open" once (or run
+  `xattr -cr` on the app). The clean solution requires an Apple Developer
+  certificate + notarization. An Apple Silicon build does not run on Intel
+  Macs and vice versa.
+- **Windows:** SmartScreen warns about unsigned downloaded EXEs →
+  "More info" → "Run anyway".
 
-Hinweise zum Weitergeben an andere:
+## Notes
 
-- **macOS:** Die Ad-hoc-Signatur reicht für den eigenen Rechner. Auf fremden Macs
-  blockt Gatekeeper heruntergeladene Apps → einmalig Rechtsklick → „Öffnen"
-  (oder `xattr -cr` auf die App). Sauber lösbar nur mit Apple-Developer-Zertifikat
-  + Notarisierung. Apple-Silicon-Build läuft nicht auf Intel-Macs und umgekehrt.
-- **Windows:** SmartScreen warnt bei unsignierten heruntergeladenen EXEs →
-  „Weitere Informationen" → „Trotzdem ausführen".
-
-## Hinweise
-
-- AES67 überträgt Kanalzahl/Bittiefe nicht im Stream selbst (das steht im SDP).
-  Das Tool rät anhand von Paketgröße und RTP-Timestamps; bei mehrdeutigen Fällen
-  (z. B. 6 Bytes/Frame = L24 stereo *oder* L16 3-Kanal) wird L24 bevorzugt,
-  über die Format-Auswahl lässt sich das korrigieren.
-- Unterstützt IPv4/UDP (Ethernet, VLAN-Tags, Linux cooked capture, Loopback).
-- Unicast-RTP-Streams werden ebenfalls erkannt (Haken „nur Multicast" entfernen).
-- 2110-20: Sampling steht nicht im Stream (nur im SDP) – Standardannahme ist
-  YCbCr 4:2:2 10 bit (BT.709). Interlaced-Streams werden nicht deinterlaced
-  (Felder landen im selben Bild).
-- JPEG XS: Dekodieren erfordert FFmpeg mit JPEG-XS-Unterstützung
-  (z. B. Build mit SVT-JPEG-XS). Ohne FFmpeg werden .jxs-Codestreams
-  exportiert, die sich extern dekodieren lassen.
-- HDCP-verschlüsselte IPMX-Streams können prinzipbedingt nicht ausgewertet werden.
+- AES67 does not carry channel count/bit depth in the stream itself (that
+  lives in the SDP). The tool guesses from packet size and RTP timestamps;
+  in ambiguous cases (e.g. 6 bytes/frame = L24 stereo *or* L16 3-channel)
+  L24 is preferred — correct it via the format selectors.
+- Supports IPv4/UDP (Ethernet, VLAN tags, Linux cooked capture, loopback).
+- Unicast RTP streams are detected as well (untick "multicast only").
+- 2110-20: the sampling is not in the stream (only in the SDP) — the default
+  assumption is YCbCr 4:2:2 10 bit (BT.709). Interlaced streams are not
+  deinterlaced (both fields land in the same image).
+- JPEG XS: decoding requires an FFmpeg with JPEG XS support (e.g. a build
+  with SVT-JPEG-XS). Without FFmpeg, .jxs codestreams are exported for
+  external decoding — instructions are written next to every export.
+- HDCP-encrypted IPMX streams cannot be analyzed, by design.
+- PTP comparison accuracy is limited by the capture host's timestamping
+  (software timestamps: typically tens of µs to ms).

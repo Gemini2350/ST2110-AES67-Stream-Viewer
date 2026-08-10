@@ -17,8 +17,6 @@ jobs:
         include:
           - os: macos-14        # Apple Silicon
             arch: mac-arm64
-          - os: macos-13        # Intel
-            arch: mac-x86_64
           - os: windows-latest
             arch: windows-x64
     runs-on: ${{ matrix.os }}
@@ -57,9 +55,38 @@ jobs:
           name: ST2110-AES67-Stream-Viewer-${{ matrix.arch }}
           path: ST2110-AES67-Stream-Viewer-${{ matrix.arch }}.zip
 
+  build-mac-intel:
+    # GitHub retired the free Intel runners (macos-13); build x86_64 on the
+    # arm64 runner via Rosetta with the universal2 Python from python.org.
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install universal2 Python (python.org)
+        run: |
+          curl -sLo python.pkg https://www.python.org/ftp/python/3.12.8/python-3.12.8-macos11.pkg
+          sudo installer -pkg python.pkg -target /
+          arch -x86_64 /usr/local/bin/python3.12 -m pip install --quiet sounddevice pyinstaller
+      - name: Smoke tests (CLI, x86_64 via Rosetta)
+        run: |
+          arch -x86_64 /usr/local/bin/python3.12 make_test_pcap.py t.pcap t.pcapng
+          arch -x86_64 /usr/local/bin/python3.12 aes67_pcap_to_wav.py t.pcap --list
+          arch -x86_64 /usr/local/bin/python3.12 aes67_pcap_to_wav.py t.pcap --analyze 2
+      - name: Build (macOS x86_64)
+        run: |
+          arch -x86_64 /usr/local/bin/python3.12 -m PyInstaller --noconfirm --windowed \
+            --name "ST2110 AES67 Stream Viewer" --icon icon.icns \
+            --osx-bundle-identifier ch.simplexity.st2110viewer aes67_pcap_to_wav.py
+          codesign --force --deep -s - "dist/ST2110 AES67 Stream Viewer.app"
+          ditto -c -k --keepParent "dist/ST2110 AES67 Stream Viewer.app" \
+            "ST2110-AES67-Stream-Viewer-mac-x86_64.zip"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ST2110-AES67-Stream-Viewer-mac-x86_64
+          path: ST2110-AES67-Stream-Viewer-mac-x86_64.zip
+
   release:
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: build
+    needs: [build, build-mac-intel]
     runs-on: ubuntu-latest
     permissions:
       contents: write
