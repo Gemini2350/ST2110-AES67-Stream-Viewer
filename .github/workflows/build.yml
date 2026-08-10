@@ -1,0 +1,72 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+
+env:
+  PYTHONUTF8: '1'
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-14        # Apple Silicon
+            arch: mac-arm64
+          - os: macos-13        # Intel
+            arch: mac-x86_64
+          - os: windows-latest
+            arch: windows-x64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install dependencies
+        run: pip install sounddevice pyinstaller
+      - name: Smoke tests (CLI)
+        shell: bash
+        run: |
+          python make_test_pcap.py t.pcap t.pcapng
+          python aes67_pcap_to_wav.py t.pcap --list
+          python aes67_pcap_to_wav.py t.pcapng --export 1 a.wav
+          python aes67_pcap_to_wav.py t.pcap --analyze 2
+          python aes67_pcap_to_wav.py t.pcap --export-frames 3 frames --frames 0-1
+          python aes67_pcap_to_wav.py t.pcap --export-frames 4 jxsframes --frames 0-1
+      - name: Build (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          pyinstaller --noconfirm --windowed --name "ST2110 AES67 Stream Viewer" \
+            --icon icon.icns --osx-bundle-identifier ch.simplexity.st2110viewer \
+            aes67_pcap_to_wav.py
+          codesign --force --deep -s - "dist/ST2110 AES67 Stream Viewer.app"
+          ditto -c -k --keepParent "dist/ST2110 AES67 Stream Viewer.app" \
+            "ST2110-AES67-Stream-Viewer-${{ matrix.arch }}.zip"
+      - name: Build (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          pyinstaller --noconfirm --onefile --windowed --name "ST2110 AES67 Stream Viewer" --icon icon.ico aes67_pcap_to_wav.py
+          Compress-Archive -Path "dist/ST2110 AES67 Stream Viewer.exe" -DestinationPath "ST2110-AES67-Stream-Viewer-${{ matrix.arch }}.zip"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ST2110-AES67-Stream-Viewer-${{ matrix.arch }}
+          path: ST2110-AES67-Stream-Viewer-${{ matrix.arch }}.zip
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: '*.zip'
