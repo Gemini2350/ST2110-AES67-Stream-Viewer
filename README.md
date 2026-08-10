@@ -1,5 +1,12 @@
 # ST 2110 / AES67 PCAP Stream Viewer
 
+![build](https://github.com/Gemini2350/ST2110-AES67-Stream-Viewer/actions/workflows/build.yml/badge.svg)
+
+**Downloads:** Fertige Builds für macOS (Apple Silicon + Intel) und Windows
+entstehen automatisch per GitHub Actions – bei jedem Release unter
+[Releases](https://github.com/Gemini2350/ST2110-AES67-Stream-Viewer/releases),
+Zwischenstände als Artifacts der [Action-Läufe](https://github.com/Gemini2350/ST2110-AES67-Stream-Viewer/actions).
+
 Grafisches Tool, das AES67-Audio- und ST-2110-Video-Streams aus
 `.pcap`/`.pcapng`-Mitschnitten (z. B. aus Wireshark) extrahiert:
 
