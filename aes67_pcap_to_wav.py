@@ -1036,7 +1036,7 @@ class Player:
 # GUI
 # ---------------------------------------------------------------------------
 
-def run_gui(initial_file=None, selftest=False):
+def run_gui(initial_file=None, selftest=False, shots_dir=None):
     import tkinter as tk
     from tkinter import ttk, filedialog, messagebox
 
@@ -1207,6 +1207,9 @@ def run_gui(initial_file=None, selftest=False):
                         if vids:
                             tree.selection_set(vids[0])
                             open_video()
+                    elif shots_dir:
+                        tree.selection_set(tree.get_children()[0])
+                        root.after(600, shots_run)
         except queue.Empty:
             pass
         root.after(100, poll_queue)
@@ -1258,7 +1261,7 @@ def run_gui(initial_file=None, selftest=False):
         sel = selected_streams()
         if not sel:
             messagebox.showinfo("Analysis", "Select a stream first.")
-            return
+            return None
         s = sel[0]
         q = s.quality()
         ptpc = ptp_holder[0]
@@ -1425,6 +1428,7 @@ def run_gui(initial_file=None, selftest=False):
                 item = cv.create_text(lx, 12, anchor='w', font=('', 10), fill=colr, text=txt)
                 lx = cv.bbox(item)[2] + 18
         cv.bind('<Configure>', draw)
+        return win
 
     analyze_btn.config(command=open_analysis)
 
@@ -1433,7 +1437,7 @@ def run_gui(initial_file=None, selftest=False):
         vsel = [s for s in selected_streams() if s.kind != 'audio']
         if not vsel:
             messagebox.showinfo("Video", "Select a video stream first.")
-            return
+            return None
         s = vsel[0]
         frames = s.frames()
         win = tk.Toplevel(root)
@@ -1616,6 +1620,7 @@ def run_gui(initial_file=None, selftest=False):
             samp_cb.bind('<<ComboboxSelected>>', lambda _e: render(cur_index()))
         win.after(80, vpoll)
         win.after(60, lambda: render(0))
+        return win
 
     video_btn.config(command=open_video)
 
@@ -1688,6 +1693,33 @@ def run_gui(initial_file=None, selftest=False):
                 play_btn.config(text="▶ Play")
         root.after(100, ui_tick)
 
+    # --- automated screenshots (hidden --screenshots mode) -------------------
+    def shots_shoot(win, name):
+        import subprocess
+        win.update_idletasks()
+        x, y = win.winfo_rootx(), win.winfo_rooty() - 30
+        w, h = win.winfo_width(), win.winfo_height() + 30
+        subprocess.run(['screencapture', '-x', '-R', f'{x},{y},{w},{h}',
+                        os.path.join(shots_dir, name)])
+
+    def shots_run():
+        shots_shoot(root, 'main.png')
+        aw = open_analysis()
+        aw.geometry('+120+90')
+
+        def stage2():
+            shots_shoot(aw, 'analysis.png')
+            aw.destroy()
+            vids = [str(i) for i, st in enumerate(streams) if st.kind != 'audio']
+            if not vids:
+                root.destroy()
+                return
+            tree.selection_set(vids[0])
+            vw = open_video()
+            vw.geometry('+120+90')
+            root.after(2000, lambda: (shots_shoot(vw, 'video.png'), root.destroy()))
+        root.after(1000, stage2)
+
     root.after(100, poll_queue)
     root.after(100, ui_tick)
     if initial_file:
@@ -1722,11 +1754,14 @@ def main():
     ap.add_argument('--channels', type=int)
     ap.add_argument('--rate', type=int)
     ap.add_argument('--gui-selftest', action='store_true', help=argparse.SUPPRESS)
+    ap.add_argument('--screenshots', metavar='DIR', help=argparse.SUPPRESS)
     args = ap.parse_args()
 
     if not (args.list or args.export or args.export_frames
             or args.analyze is not None):
-        run_gui(args.pcap, selftest=args.gui_selftest)
+        if args.screenshots:
+            os.makedirs(args.screenshots, exist_ok=True)
+        run_gui(args.pcap, selftest=args.gui_selftest, shots_dir=args.screenshots)
         return
 
     if not args.pcap:

@@ -4,7 +4,7 @@ dist/
 __pycache__/
 *.spec
 icon.iconset/
-sample_capture.pcap
+/sample_capture.pcap
 *.pcapng
 appstore.provisionprofile
 .DS_Store

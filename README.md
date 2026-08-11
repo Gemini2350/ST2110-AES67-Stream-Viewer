@@ -33,6 +33,22 @@ A GUI tool that extracts AES67 audio and ST 2110 video streams from
 
 Runs on **macOS and Windows** (and Linux), Python ≥ 3.9 with tkinter.
 
+## Screenshots
+
+Stream list — every RTP/AES67/ST 2110 flow by multicast address, source, SSRC,
+detected format and PTP status:
+
+![Main window](docs/main.png)
+
+Per-stream analysis — packet loss, RFC 3550 jitter, packet-spacing and the
+RTP-timestamp-vs-PTP comparison, with a timing graph and a loss-event list:
+
+![Analysis window](docs/analysis.png)
+
+Video preview — decode and scrub ST 2110-20 frames (and export as PNG / .jxs):
+
+![Video window](docs/video.png)
+
 ## Running from source
 
 - **macOS:** double-click `run.command` (or `./run.command` in a terminal).
