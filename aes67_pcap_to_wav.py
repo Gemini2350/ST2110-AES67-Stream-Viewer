@@ -549,6 +549,7 @@ class Stream:
         self.src_port = src_port
         self.ssrc = ssrc
         self.pt = pt
+        self.sources = {(src_ip, src_port)}   # all senders seen for this stream
         self.packets = []  # (wall_ts, seq, rtp_ts, payload)
         # filled by analyze():
         self.ordered = []          # (ext_seq, ext_ts, payload) sorted, deduped
@@ -819,6 +820,10 @@ class Stream:
                         'min': min(offs), 'max': max(offs),
                         'drift_ppm': slope * 1000.0}
 
+    def src_desc(self):
+        extra = len(self.sources) - 1
+        return f"{self.src_ip}:{self.src_port}" + (f" (+{extra})" if extra > 0 else "")
+
     def label(self):
         return f"{self.dst_ip}:{self.dst_port} SSRC 0x{self.ssrc:08X}"
 
@@ -862,6 +867,7 @@ def collect_streams(path, progress=None):
         st = streams.get(key)
         if st is None:
             st = streams[key] = Stream(dst_ip, dport, src_ip, sport, ssrc, pt)
+        st.sources.add((src_ip, sport))
         st.packets.append((wall, seq, ts, audio))
     result = [s for s in streams.values() if len(s.packets) >= 5 and s.analyze()]
     result.sort(key=lambda s: (s.dst_ip, s.dst_port, s.ssrc))
@@ -1036,8 +1042,8 @@ def run_gui(initial_file=None, selftest=False):
 
     root = tk.Tk()
     root.title("ST 2110 / AES67 PCAP Stream Viewer")
-    root.geometry("980x560")
-    root.minsize(760, 420)
+    root.geometry("1120x560")
+    root.minsize(820, 420)
 
     streams = []
     ptp_holder = [None]   # PtpClock when the capture contains PTP
@@ -1057,10 +1063,10 @@ def run_gui(initial_file=None, selftest=False):
     file_lbl.pack(side='left', padx=12)
 
     # --- stream table ------------------------------------------------------
-    cols = ('addr', 'port', 'ssrc', 'pt', 'typ', 'pkts', 'lost', 'fmt', 'dur')
-    heads = ('Multicast address', 'Port', 'SSRC', 'PT', 'Type', 'Packets', 'Lost',
-             'Format (detected)', 'Duration')
-    widths = (160, 60, 100, 40, 60, 70, 60, 220, 80)
+    cols = ('addr', 'port', 'src', 'ssrc', 'pt', 'typ', 'pkts', 'lost', 'fmt', 'dur')
+    heads = ('Multicast address', 'Port', 'Source', 'SSRC', 'PT', 'Type', 'Packets',
+             'Lost', 'Format (detected)', 'Duration')
+    widths = (150, 55, 150, 100, 40, 55, 65, 55, 210, 75)
     mid = ttk.Frame(root, padding=(10, 0))
     mid.pack(fill='both', expand=True)
     tree = ttk.Treeview(mid, columns=cols, show='headings', selectmode='extended')
@@ -1137,8 +1143,8 @@ def run_gui(initial_file=None, selftest=False):
                 continue
             tag = 'mc' if s.is_multicast else 'uc'
             tree.insert('', 'end', iid=str(i), tags=(tag,), values=(
-                s.dst_ip + ('' if s.is_multicast else '  (Unicast)'),
-                s.dst_port, f"0x{s.ssrc:08X}", s.pt,
+                s.dst_ip + ('' if s.is_multicast else '  (unicast)'),
+                s.dst_port, s.src_desc(), f"0x{s.ssrc:08X}", s.pt,
                 'Audio' if s.kind == 'audio' else 'Video',
                 len(s.ordered), s.lost, s.media_desc(), tfmt(s.duration)))
         tree.tag_configure('uc', foreground='gray')
@@ -1265,6 +1271,7 @@ def run_gui(initial_file=None, selftest=False):
         info = ttk.Frame(win, padding=(12, 10))
         info.pack(fill='x')
         pairs = (
+            ("Source", s.src_desc()),
             ("Packets received", f"{q['received']:,} of {q['expected']:,}"),
             ("Lost", f"{q['lost']:,} ({q['loss_pct']:.3f} %)"),
             ("Duplicates", f"{q['dups']:,}"),
@@ -1732,7 +1739,8 @@ def main():
         print(f"{npkts:,} packets, {len(streams)} stream(s){ptxt}:")
         for i, s in enumerate(streams, 1):
             mc = '' if s.is_multicast else ' (unicast)'
-            print(f"  [{i}] {s.dst_ip}:{s.dst_port}{mc}  SSRC 0x{s.ssrc:08X}  PT {s.pt}  "
+            print(f"  [{i}] {s.dst_ip}:{s.dst_port}{mc}  from {s.src_desc()}  "
+                  f"SSRC 0x{s.ssrc:08X}  PT {s.pt}  "
                   f"{len(s.ordered)} packets ({s.lost} lost)  "
                   f"{s.media_desc()}  {s.duration:.2f}s")
     if args.analyze is not None:
@@ -1741,7 +1749,8 @@ def main():
             sys.exit(f"Stream {n} does not exist (1..{len(streams)})")
         s = streams[n - 1]
         q = s.quality()
-        print(f"Analysis [{n}] {s.label()}  (PT {s.pt}, {s.media_desc()})")
+        print(f"Analysis [{n}] {s.label()}  "
+              f"(from {s.src_desc()}, PT {s.pt}, {s.media_desc()})")
         print(f"  Packets:  {q['received']:,} received of {q['expected']:,} expected | "
               f"lost: {q['lost']:,} ({q['loss_pct']:.3f} %) | "
               f"duplicates: {q['dups']} | reordered: {q['reordered']}")
